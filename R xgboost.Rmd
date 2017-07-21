@@ -1,0 +1,118 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(data.table)
+library(dplyr)
+library(tidyr)
+library(feather)
+
+# Load Data ---------------------------------------------------------------
+path <- "/media/tin/DATA/Kaggle/Instacart/Input/train_prepared.feather"
+train <- read_feather(path)
+
+path_test <- "/media/tin/DATA/Kaggle/Instacart/Input/test_prepared.feather"
+test <- read_feather(path_test)
+```
+
+```{r}
+glimpse(test)
+```
+
+```{r}
+glimpse(train)
+#mapping characteristics to reordered, product_id and order_id agnostic
+```
+
+```{r}
+#all the data downloaded concentrated down to train and test
+#mapping relation between reorder and other variables
+#the question is whether any big information loss occurred when concentrated down?
+
+#New products not ordered before in the prior products are dropped and not considered
+#reduce sample space of products to ordered previously only
+
+# Model -------------------------------------------------------------------
+library(xgboost)
+
+params <- list(
+  "objective"           = "reg:logistic",
+  "eval_metric"         = "logloss",
+  "eta"                 = 0.1,
+  "max_depth"           = 6,
+  "min_child_weight"    = 10,
+  "gamma"               = 0.70,
+  "subsample"           = 0.76,
+  "colsample_bytree"    = 0.95,
+  "alpha"               = 2e-05,
+  "lambda"              = 10
+)
+
+subtrain <- train %>% sample_frac(0.01)
+X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered)), label = subtrain$reordered)
+
+# X <- xgb.DMatrix(as.matrix(train %>% select(-reordered)), label = train$reordered)
+
+model <- xgboost(data = X, params = params, nrounds = 80)
+
+importance <- xgb.importance(colnames(X), model = model)
+xgb.ggplot.importance(importance)
+
+rm(X, importance, subtrain)
+gc()
+```
+
+```{r}
+# Apply model -------------------------------------------------------------
+
+#test data
+X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
+
+test$reordered <- predict(model, X)
+test$reordered <- (test$reordered > 0.19) * 1 #* 1 to convert True False to 0 1
+#originally 0.21
+```
+
+```{r}
+#for orders with atleast 1 product
+submission <- test %>%
+  filter(reordered == 1) %>%
+  group_by(order_id) %>%
+  summarise(
+    products = paste(product_id, collapse = " ")
+  )
+submission
+```
+
+```{r}
+
+
+missing <- data.frame(
+  order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
+  products = "None"
+)
+glimpse(missing)
+head(missing, 10)
+```
+
+```{r}
+submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
+glimpse(submission)
+head(submission, 10)
+```
+
+```{r}
+path <- path <- "/media/tin/DATA/Kaggle/Instacart/Output/"
+write.csv(submission, file = file.path(path,"submit_fulltrain.csv"), row.names = F)
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
