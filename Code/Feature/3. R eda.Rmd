@@ -89,6 +89,9 @@ gc()
 ```
 ```{r}
 # Database ----------------------------------------------------------------
+#righttttttt, this lists down all previously purchased products of a user
+#candidate for train and set later
+
 data <- orderp %>%
   group_by(user_id, product_id) %>% 
   summarise(
