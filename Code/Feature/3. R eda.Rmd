@@ -12,12 +12,16 @@ library(feather)
 # Load Data ---------------------------------------------------------------
 path <- "/media/tin/DATA/Kaggle/Instacart/Input/"
 
-aisles <- read_feather(file.path(path, "aisles.feather"))
-departments <- read_feather(file.path(path, "departments.feather"))
-orderp <- read_feather(file.path(path, "order_products__prior.feather"))
-ordert <- read_feather(file.path(path, "order_products__train.feather"))
-orders <- read_feather(file.path(path, "orders.feather"))
-products <- read_feather(file.path(path, "products.feather"))
+rf <- function(x) {
+  read_feather(file.path(path, x))
+}
+
+aisles <- rf("aisles.feather")
+departments <- rf("departments.feather")
+orderp <- rf("order_products__prior.feather")
+ordert <- rf("order_products__train.feather")
+orders <- rf("orders.feather")
+products <- rf("products.feather")
 
 aisles$aisle <- as.factor(aisles$aisle)
 departments$department <- as.factor(departments$department)
