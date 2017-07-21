@@ -16,21 +16,15 @@ rf <- function(x) {
   read_feather(file.path(path, x))
 }
 
-aisles <- rf("aisles.feather")
-departments <- rf("departments.feather")
 orderp <- rf("order_products__prior.feather")
 ordert <- rf("order_products__train.feather")
 orders <- rf("orders.feather")
-products <- rf("products.feather")
 
-aisles$aisle <- as.factor(aisles$aisle)
-departments$department <- as.factor(departments$department)
 orders$eval_set <- as.factor(orders$eval_set)
-products$product_name <- as.factor(products$product_name)
 ```
 
 ```{r}
-# transform the 2nd layers
+# step 2
 ordert$user_id <- orders$user_id[match(ordert$order_id, orders$order_id)]
 orderp <- orders %>% inner_join(orderp, by = "order_id")
 ```
@@ -57,7 +51,6 @@ prd <- prd %>% select(-prod_reorders, -prod_first_orders, -prod_second_orders)
 
 # prd contains information from orderp
 
-rm(products)
 gc()
 ```
 
