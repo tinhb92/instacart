@@ -96,8 +96,8 @@ gc()
 ```
 ```{r}
 # Database ----------------------------------------------------------------
-#righttttttt, this lists down all previously purchased products of a user
-#candidate for train and set later
+# righttttttt, this lists down all previously purchased products of a user
+# candidate for train and set later
 
 data <- orderp %>%
   group_by(user_id, product_id) %>% 
@@ -108,11 +108,7 @@ data <- orderp %>%
     up_average_cart_position = mean(add_to_cart_order)) #analyse the sequence of purchased product
 
 rm(orderp, orders)
-#no more orderp and orders, now only users, prd and data
 
-```
-
-```{r}
 data <- data %>% 
   inner_join(prd, by = "product_id") %>%
   inner_join(users, by = "user_id") %>%
@@ -149,9 +145,69 @@ browseVignettes(package = "Rcpp")
 ```
 
 ```{r}
-(a$response <- NULL)
-a
+library(xgboost)
+
+params <- list(
+  "objective"           = "reg:logistic",
+  "eval_metric"         = "logloss",
+  "eta"                 = 0.1,
+  "max_depth"           = 6,
+  "min_child_weight"    = 10,
+  "gamma"               = 0.70,
+  "subsample"           = 0.76,
+  "colsample_bytree"    = 0.95,
+  "alpha"               = 2e-05,
+  "lambda"              = 10
+)
+
+subtrain <- train %>% sample_frac(0.01)
+X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered)), label = subtrain$reordered)
+
+# X <- xgb.DMatrix(as.matrix(train %>% select(-reordered)), label = train$reordered)
+
+model <- xgboost(data = X, params = params, nrounds = 80)
+
+importance <- xgb.importance(colnames(X), model = model)
+xgb.ggplot.importance(importance)
+
+rm(X, importance, subtrain)
+gc()
 ```
+
+```{r}
+# Apply model -------------------------------------------------------------
+
+#test data
+X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
+
+test$reordered <- predict(model, X)
+test$reordered <- (test$reordered > 0.19) * 1 #* 1 to convert True False to 0 1
+#originally 0.21
+
+#for orders with atleast 1 product
+submission <- test %>%
+  filter(reordered == 1) %>%
+  group_by(order_id) %>%
+  summarise(
+    products = paste(product_id, collapse = " ")
+  )
+submission
+
+missing <- data.frame(
+  order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
+  products = "None"
+)
+glimpse(missing)
+head(missing, 10)
+
+submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
+```
+
+```{r}
+path <- path <- "/media/tin/DATA/Kaggle/Instacart/Output/"
+write.csv(submission, file = file.path(path,"submit_fulltrain.csv"), row.names = F)
+```
+
 
 
 
