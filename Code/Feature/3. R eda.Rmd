@@ -191,20 +191,17 @@ submission <- test %>%
   summarise(
     products = paste(product_id, collapse = " ")
   )
-submission
 
 missing <- data.frame(
   order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
   products = "None"
 )
-glimpse(missing)
-head(missing, 10)
 
 submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
 ```
 
 ```{r}
-path <- "/media/tin/DATA/Kaggle/Instacart/Output/"
+path <- "/media/tin/DATA/Kaggle/Instacart/Output/" 
 write.csv(submission, file = file.path(path,"submit_25 features.csv"), row.names = F)
 ```
 
