@@ -30,6 +30,7 @@ orderp <- orders %>% inner_join(orderp, by = "order_id")
 ```
 
 ```{r}
+# step 3
 prd <- orderp %>%
   arrange(user_id, order_number, product_id) %>%
   group_by(user_id, product_id) %>%
@@ -43,11 +44,16 @@ prd <- orderp %>%
     prod_second_orders = sum(product_time == 2)
   )
 
-prd$prod_reorder_probability <- prd$prod_second_orders / prd$prod_first_orders
-prd$prod_reorder_times <- 1 + prd$prod_reorders / prd$prod_first_orders
-prd$prod_reorder_ratio <- prd$prod_reorders / prd$prod_orders
+prd <- prd %>%
+  mutate(prod_reorder_probability = prod_second_orders / prod_first_orders) %>%
+  mutate(prod_reorder_times = 1 + prod_reorders / prod_first_orders) %>%
+  mutate(prod_reorder_ratio = prod_reorders / prod_orders) %>%
+  select(-prod_reorders, -prod_first_orders, -prod_second_orders)
 
-prd <- prd %>% select(-prod_reorders, -prod_first_orders, -prod_second_orders)
+# prd$prod_reorder_probability <- prd$prod_second_orders / prd$prod_first_orders
+# prd$prod_reorder_times <- 1 + prd$prod_reorders / prd$prod_first_orders
+# prd$prod_reorder_ratio <- prd$prod_reorders / prd$prod_orders
+# prd <- prd %>% 
 
 # prd contains information from orderp
 
@@ -73,8 +79,9 @@ us <- orderp %>%
     user_distinct_products = n_distinct(product_id)
   )
 
-users <- users %>% inner_join(us)
-users$user_average_basket <- users$user_total_products / users$user_orders
+users <- users %>% 
+  inner_join(us) %>%
+  mutate(user_average_basket = user_total_products / user_orders)
 
 us <- orders %>%
   filter(eval_set != "prior") %>%
@@ -108,50 +115,42 @@ rm(orderp, orders)
 ```{r}
 data <- data %>% 
   inner_join(prd, by = "product_id") %>%
-  inner_join(users, by = "user_id")
-```
-```{r}
-data$up_order_rate <- data$up_orders / data$user_orders
-data$up_orders_since_last_order <- data$user_orders - data$up_last_order
-data$up_order_rate_since_first_order <- data$up_orders / (data$user_orders - data$up_first_order + 1)
-
-```
-
-```{r}
-
-
-data <- data %>% 
+  inner_join(users, by = "user_id") %>%
+  mutate(up_order_rate <- up_orders / user_orders) %>%
+  mutate(up_orders_since_last_order <- user_orders - up_last_order) %>%
+  mutate(up_order_rate_since_first_order <- up_orders / (user_orders - up_first_order + 1)) %>%
   left_join(ordert %>% select(user_id, product_id, reordered), 
             by = c("user_id", "product_id"))
 
 rm(ordert, prd, users)
 gc()
 ```
-```{r}
-# Train / Test datasets ---------------------------------------------------
-train <- as.data.frame(data[data$eval_set == "train",])
-train$eval_set <- NULL
-train$user_id <- NULL
-train$product_id <- NULL
-train$order_id <- NULL
-train$reordered[is.na(train$reordered)] <- 0
-```
 
 ```{r}
-test <- as.data.frame(data[data$eval_set == "test",])
-test$eval_set <- NULL
-test$user_id <- NULL
-test$reordered <- NULL
+# Step 5: Train / Test datasets ---------------------------------------------------
+train <- as.data.frame(data[data$eval_set == "train",]) %>%
+  select(-eval_set, -user_id, -product_id, -order_id)
+
+train$reordered[is.na(train$reordered)] <- 0
+
+test <- as.data.frame(data[data$eval_set == "test",]) %>%
+  select(-eval_set, -user_id, -reordered)
 
 rm(data)
 gc()
 ```
+
 ```{r}
 gc()
 ```
 
 ```{r}
 browseVignettes(package = "Rcpp")
+```
+
+```{r}
+(a$response <- NULL)
+a
 ```
 
 

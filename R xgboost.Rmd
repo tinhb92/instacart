@@ -31,6 +31,10 @@ glimpse(train)
 ```
 
 ```{r}
+
+```
+
+```{r}
 #all the data downloaded concentrated down to train and test
 #mapping relation between reorder and other variables
 #the question is whether any big information loss occurred when concentrated down?
