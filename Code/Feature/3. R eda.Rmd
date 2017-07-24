@@ -8,6 +8,7 @@ library(data.table)
 library(dplyr)
 library(tidyr)
 library(feather)
+library(ggplot2)
 
 # Load Data ---------------------------------------------------------------
 path <- "/media/tin/DATA/Kaggle/Instacart/Input/"
@@ -34,7 +35,7 @@ orderp <- orders %>% inner_join(orderp, by = "order_id")
 prd <- orderp %>%
   arrange(user_id, order_number, product_id) %>%
   group_by(user_id, product_id) %>%
-  mutate(product_time = row_number()) %>% #ranking, counter for times purchased; go with previous group_by
+  mutate(product_time = row_number()) %>% #ranking, counter for times purchased
   ungroup() %>%
   group_by(product_id) %>% #by products, aggragate over all orders and all customers
   summarise(
@@ -43,19 +44,14 @@ prd <- orderp %>%
     prod_first_orders = sum(product_time == 1),
     prod_second_orders = sum(product_time == 2)
   )
+```
 
+```{r}
 prd <- prd %>%
   mutate(prod_reorder_probability = prod_second_orders / prod_first_orders) %>%
   mutate(prod_reorder_times = 1 + prod_reorders / prod_first_orders) %>%
   mutate(prod_reorder_ratio = prod_reorders / prod_orders) %>%
   select(-prod_reorders, -prod_first_orders, -prod_second_orders)
-
-# prd$prod_reorder_probability <- prd$prod_second_orders / prd$prod_first_orders
-# prd$prod_reorder_times <- 1 + prd$prod_reorders / prd$prod_first_orders
-# prd$prod_reorder_ratio <- prd$prod_reorders / prd$prod_orders
-# prd <- prd %>% 
-
-# prd contains information from orderp
 
 gc()
 ```
@@ -86,7 +82,8 @@ users <- users %>%
 us <- orders %>%
   filter(eval_set != "prior") %>%
   select(user_id, order_id, eval_set,
-         time_since_last_order = days_since_prior_order)
+         time_since_last_order = days_since_prior_order,
+         order_number, order_dow, order_hour_of_day)  #additional details for train and test sets
 
 users <- users %>% inner_join(us)
 # combine prior and train & test infomation for each user
@@ -105,10 +102,17 @@ data <- orderp %>%
     up_orders = n(),
     up_first_order = min(order_number),
     up_last_order = max(order_number),
-    up_average_cart_position = mean(add_to_cart_order)) #analyse the sequence of purchased product
+    up_average_cart_position = mean(add_to_cart_order), #analyse the sequence of purchased product
+    ave_dow = mean(order_dow),
+    ave_hour = mean(order_hour_of_day),
+    ave_freq = mean(days_since_prior_order)) #additional features
 
-rm(orderp, orders)
+# rm(orderp, orders)
 
+
+```
+
+```{r}
 data <- data %>% 
   inner_join(prd, by = "product_id") %>%
   inner_join(users, by = "user_id") %>%
@@ -137,10 +141,6 @@ gc()
 ```
 
 ```{r}
-gc()
-```
-
-```{r}
 browseVignettes(package = "Rcpp")
 ```
 
@@ -160,17 +160,17 @@ params <- list(
   "lambda"              = 10
 )
 
-subtrain <- train %>% sample_frac(0.01)
+subtrain <- train #%>% sample_frac(0.1)
 X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered)), label = subtrain$reordered)
 
 # X <- xgb.DMatrix(as.matrix(train %>% select(-reordered)), label = train$reordered)
 
 model <- xgboost(data = X, params = params, nrounds = 80)
 
-importance <- xgb.importance(colnames(X), model = model)
-xgb.ggplot.importance(importance)
-
-rm(X, importance, subtrain)
+# importance <- xgb.importance(colnames(X), model = model)
+# xgb.ggplot.importance(importance)
+# 
+# rm(X, importance, subtrain)
 gc()
 ```
 
@@ -181,7 +181,7 @@ gc()
 X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
 
 test$reordered <- predict(model, X)
-test$reordered <- (test$reordered > 0.19) * 1 #* 1 to convert True False to 0 1
+test$reordered <- (test$reordered > 0.21) * 1 #* 1 to convert True False to 0 1
 #originally 0.21
 
 #for orders with atleast 1 product
@@ -204,8 +204,8 @@ submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
 ```
 
 ```{r}
-path <- path <- "/media/tin/DATA/Kaggle/Instacart/Output/"
-write.csv(submission, file = file.path(path,"submit_fulltrain.csv"), row.names = F)
+path <- "/media/tin/DATA/Kaggle/Instacart/Output/"
+write.csv(submission, file = file.path(path,"submit_25 features.csv"), row.names = F)
 ```
 
 
