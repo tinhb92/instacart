@@ -9,7 +9,12 @@ library(dplyr)
 library(tidyr)
 library(feather)
 library(ggplot2)
+library(xgboost)
+library(stringr)
 
+```
+
+```{r}
 # Load Data ---------------------------------------------------------------
 path <- "/media/tin/DATA/Kaggle/Instacart/Input/"
 
@@ -145,8 +150,6 @@ browseVignettes(package = "Rcpp")
 ```
 
 ```{r}
-library(xgboost)
-
 params <- list(
   "objective"           = "reg:logistic",
   "eval_metric"         = "logloss",
@@ -173,7 +176,6 @@ model <- xgboost(data = X, params = params, nrounds = 80)
 # rm(X, importance, subtrain)
 gc()
 ```
-
 ```{r}
 # Apply model -------------------------------------------------------------
 
@@ -181,6 +183,22 @@ gc()
 X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
 
 test$reordered <- predict(model, X)
+```
+
+```{r}
+ggplot(test, aes(reordered)) +
+  geom_histogram(binwidth = 0.01) +
+  coord_cartesian(xlim = c(0, 0.05))
+```
+
+```{r}
+test %>%
+  filter(reordered > 0.01) %>%
+  count() %>%
+  mutate(frac = n/ nrow(test))
+```
+
+```{r}
 test$reordered <- (test$reordered > 0.21) * 1 #* 1 to convert True False to 0 1
 #originally 0.21
 
@@ -198,6 +216,16 @@ missing <- data.frame(
 )
 
 submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
+```
+
+```{r}
+submi <- submission %>%
+  mutate(lengfdsf = ifelse(products == 'None', 0, (str_count(products, '\\s+') + 1)))
+```
+
+```{r}
+ggplot(submi, aes(lengfdsf)) +
+  geom_histogram()
 ```
 
 ```{r}
