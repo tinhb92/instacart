@@ -10,7 +10,7 @@ library(tidyr)
 library(feather)
 library(ggplot2)
 library(stringr)
-library(lightgbm)
+library(reticulate)
 ```
 
 ```{r}
@@ -143,60 +143,9 @@ test <- as.data.frame(data[data$eval_set == "test",]) %>%
 rm(data)
 gc()
 ```
-```{r}
-test$reordered <- NA
-```
-
-```{r}
-#lightgbm
-subtrain <- train %>% sample_frac(0.01)
-
-dtrain <- lgb.Dataset(as.matrix(subtrain %>% select(-reordered)), label = subtrain$reordered)
-dtest <- lgb.Dataset(as.matrix(test %>% select(-order_id, -product_id, -reordered)), 
-                     label = test$reordered)
-
-nrounds <- 20
-param <- list(max_depth = 10,
-              learning_rate = 1,
-              objective = "binary",
-              metric = "binary_logloss",
-              num_leaves = 90,
-              verbosity = 0,
-              verbose = 0)
-
-lgb.cv(param,
-       dtrain,
-       nrounds,
-       nfold = 5,
-       eval = "binary_error")
-
-# result <- lightgbm(data = dtrain,
-#                    max_depth = 10,
-#               learning_rate = 1,
-#               objective = "binary",
-#               metric = "binary_logloss",
-#               num_leaves = 90,
-#               verbosity = 0,
-#               nrounds = 20,
-#               verbose = 2)
-```
-
-
-```{r}
-
-```
 
 ```{r}
 browseVignettes(package = "Rcpp")
-```
-
-```{r}
-# Apply model -------------------------------------------------------------
-
-#test data
-X <- xgb.DMatrix(as.matrix())
-
-test$reordered <- predict(model, X)
 ```
 
 ```{r}
@@ -262,12 +211,6 @@ path <- "/media/tin/DATA/Kaggle/Instacart/Output/"
 write.csv(submission, file = file.path(path,"submit_25 features.csv"), row.names = F)
 ```
 
-```{r}
-devtools::install_github("Microsoft/LightGBM/R-package")
-```
-```{r}
-library(lightgbm)
-```
 
 
 
