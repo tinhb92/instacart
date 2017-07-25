@@ -10,7 +10,6 @@ library(tidyr)
 library(feather)
 library(ggplot2)
 library(stringr)
-library(reticulate)
 ```
 
 ```{r}
@@ -21,14 +20,13 @@ rf <- function(x) {
   read_feather(file.path(path, x))
 }
 
+# step 1
 orderp <- rf("order_products__prior.feather")
 ordert <- rf("order_products__train.feather")
 orders <- rf("orders.feather")
 
 orders$eval_set <- as.factor(orders$eval_set)
-```
 
-```{r}
 # step 2
 ordert$user_id <- orders$user_id[match(ordert$order_id, orders$order_id)]
 orderp <- orders %>% inner_join(orderp, by = "order_id")
@@ -48,9 +46,7 @@ prd <- orderp %>%
     prod_first_orders = sum(product_time == 1),
     prod_second_orders = sum(product_time == 2)
   )
-```
 
-```{r}
 prd <- prd %>%
   mutate(prod_reorder_probability = prod_second_orders / prod_first_orders) %>%
   mutate(prod_reorder_times = 1 + prod_reorders / prod_first_orders) %>%
@@ -58,9 +54,7 @@ prd <- prd %>%
   select(-prod_reorders, -prod_first_orders, -prod_second_orders)
 
 gc()
-```
 
-```{r}
 # Users -------------------------------------------------------------------
 users <- orders %>%
   filter(eval_set == "prior") %>%
@@ -87,46 +81,51 @@ us <- orders %>%
   filter(eval_set != "prior") %>%
   select(user_id, order_id, eval_set,
          time_since_last_order = days_since_prior_order,
-         order_number, order_dow, order_hour_of_day)  #additional details for train and test sets
+         order_number, order_dow, order_hour_of_day)  #additional
 
 users <- users %>% inner_join(us)
 # combine prior and train & test infomation for each user
 
 rm(us)
 gc()
-```
-```{r}
-# Database ----------------------------------------------------------------
-# righttttttt, this lists down all previously purchased products of a user
-# candidate for train and set later
 
+# Database ----------------------------------------------------------------
 data <- orderp %>%
   group_by(user_id, product_id) %>% 
   summarise(
     up_orders = n(),
     up_first_order = min(order_number),
     up_last_order = max(order_number),
-    up_average_cart_position = mean(add_to_cart_order), #analyse the sequence of purchased product
+    up_average_cart_position = mean(add_to_cart_order), # analyse sequence of purchased product
     ave_dow = mean(order_dow),
-    ave_hour = mean(order_hour_of_day),
-    ave_freq = mean(days_since_prior_order)) #additional features
+    ave_hour = mean(order_hour_of_day)) # additional features
 
+temp <- orderp %>%
+  filter(!is.na(days_since_prior_order)) %>%
+  group_by(user_id, product_id) %>% 
+  summarise(
+    ave_freq = mean(days_since_prior_order)
+  )
+
+data <- data %>%
+  left_join(temp, by = c("user_id", "product_id")) %>%
+  mutate(ave_freq = ifelse(is.na(ave_freq), 0, ave_freq))
 # rm(orderp, orders)
-
-
 ```
 
 ```{r}
+# Step 4 ----------------------------------------------------
 data <- data %>% 
   inner_join(prd, by = "product_id") %>%
   inner_join(users, by = "user_id") %>%
-  mutate(up_order_rate <- up_orders / user_orders) %>%
-  mutate(up_orders_since_last_order <- user_orders - up_last_order) %>%
-  mutate(up_order_rate_since_first_order <- up_orders / (user_orders - up_first_order + 1)) %>%
+  mutate(up_order_rate = up_orders / user_orders) %>%
+  mutate(up_orders_since_last_order = user_orders - up_last_order) %>%
+  mutate(up_order_rate_since_first_order = up_orders / 
+           (user_orders - up_first_order + 1)) %>%
   left_join(ordert %>% select(user_id, product_id, reordered), 
             by = c("user_id", "product_id"))
 
-rm(ordert, prd, users)
+# rm(ordert, prd, users)
 gc()
 ```
 
@@ -141,6 +140,13 @@ test <- as.data.frame(data[data$eval_set == "test",]) %>%
   select(-eval_set, -user_id, -reordered)
 
 rm(data)
+gc()
+```
+
+```{r}
+write_feather(train, "train26.feather")
+write_feather(test, "test26.feather")
+rm(train, test)
 gc()
 ```
 
@@ -177,26 +183,6 @@ ggplot(test, aes(up_orders, reordered)) +
 ```
 
 ```{r}
-test$reordered <- (test$reordered > 0.21) * 1 #* 1 to convert True False to 0 1
-#originally 0.21
-
-#for orders with atleast 1 product
-submission <- test %>%
-  filter(reordered == 1) %>%
-  group_by(order_id) %>%
-  summarise(
-    products = paste(product_id, collapse = " ")
-  )
-
-missing <- data.frame(
-  order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
-  products = "None"
-)
-
-submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
-```
-
-```{r}
 submi <- submission %>%
   mutate(lengfdsf = ifelse(products == 'None', 0, (str_count(products, '\\s+') + 1)))
 ```
@@ -207,8 +193,21 @@ ggplot(submi, aes(lengfdsf)) +
 ```
 
 ```{r}
-path <- "/media/tin/DATA/Kaggle/Instacart/Output/" 
-write.csv(submission, file = file.path(path,"submit_25 features.csv"), row.names = F)
+orders %>%
+  filter(eval_set == 'test') %>%
+  distinct(user_id)
+
+orders %>%
+  filter(eval_set == 'train') %>%
+  distinct(user_id)
+
+orders %>%
+  filter(eval_set == 'prior') %>%
+  distinct(user_id)
+```
+
+```{r}
+
 ```
 
 
