@@ -81,7 +81,7 @@ us <- orders %>%
   filter(eval_set != "prior") %>%
   select(user_id, order_id, eval_set,
          time_since_last_order = days_since_prior_order,
-         order_number, order_dow, order_hour_of_day)  #additional
+         order_dow, order_hour_of_day)  #additional
 
 users <- users %>% inner_join(us)
 # combine prior and train & test infomation for each user
@@ -185,29 +185,24 @@ ggplot(test, aes(up_orders, reordered)) +
 ```{r}
 submi <- submission %>%
   mutate(lengfdsf = ifelse(products == 'None', 0, (str_count(products, '\\s+') + 1)))
-```
 
-```{r}
 ggplot(submi, aes(lengfdsf)) +
   geom_histogram()
 ```
 
 ```{r}
-orders %>%
-  filter(eval_set == 'test') %>%
-  distinct(user_id)
-
-orders %>%
-  filter(eval_set == 'train') %>%
-  distinct(user_id)
-
-orders %>%
-  filter(eval_set == 'prior') %>%
-  distinct(user_id)
+data %>%
+  ggplot(aes(user_distinct_products, user_total_products)) +
+  geom_point(alpha = 1/100)
 ```
 
 ```{r}
-
+library(corrplot)
+m <- as.data.frame(data) %>% select(-user_id, -product_id, -eval_set, -order_id, -reordered)
+corrplot(as.matrix(cor(m)), tl.cex = 0.6)
+```
+```{r}
+rm(us, users)
 ```
 
 
