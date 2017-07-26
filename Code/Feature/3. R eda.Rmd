@@ -10,6 +10,9 @@ library(tidyr)
 library(feather)
 library(ggplot2)
 library(stringr)
+library(corrplot)
+library(DBI)
+library(RSQLite)
 ```
 
 ```{r}
@@ -21,15 +24,27 @@ rf <- function(x) {
 }
 
 # step 1
-orderp <- rf("order_products__prior.feather")
-ordert <- rf("order_products__train.feather")
+order_products__prior <- rf("order_products__prior.feather")
+order_products__train <- rf("order_products__train.feather")
 orders <- rf("orders.feather")
 
 orders$eval_set <- as.factor(orders$eval_set)
 
+instacart <- dbConnect(SQLite(), "instacart.sqlite")
+dbWriteTable(instacart, name = "order_products__prior", order_products__prior)
+dbWriteTable(instacart, name = "order_products__train", order_products__train)
+dbWriteTable(instacart, name = "orders", orders)
+
 # step 2
-ordert$user_id <- orders$user_id[match(ordert$order_id, orders$order_id)]
-orderp <- orders %>% inner_join(orderp, by = "order_id")
+ordert <- order_products__train %>%
+  mutate(user_id = orders$user_id[match(order_products__train$order_id, orders$order_id)])
+orderp <- orders %>% 
+  inner_join(order_products__prior, by = "order_id")
+
+dbWriteTable(instacart, name = "ordert", ordert)
+dbWriteTable(instacart, name = "orderp", orderp)
+
+rm(order_products__prior, order_products__train)
 ```
 
 ```{r}
@@ -44,14 +59,15 @@ prd <- orderp %>%
     prod_orders = n(),
     prod_reorders = sum(reordered),
     prod_first_orders = sum(product_time == 1),
-    prod_second_orders = sum(product_time == 2)
+    prod_second_orders = sum(product_time == 2),
+    prod_third_orders = sum(product_time == 3)
   )
 
 prd <- prd %>%
-  mutate(prod_reorder_probability = prod_second_orders / prod_first_orders) %>%
+  mutate(prod_reorder_second = prod_second_orders / prod_first_orders) %>%
   mutate(prod_reorder_times = 1 + prod_reorders / prod_first_orders) %>%
-  mutate(prod_reorder_ratio = prod_reorders / prod_orders) %>%
-  select(-prod_reorders, -prod_first_orders, -prod_second_orders)
+  mutate(prod_reorder_third = prod_third_orders / prod_second_orders) %>%
+  select(-prod_reorders, -prod_first_orders, -prod_second_orders, -prod_third_orders)
 
 gc()
 
@@ -90,7 +106,7 @@ rm(us)
 gc()
 
 # Database ----------------------------------------------------------------
-data <- orderp %>%
+product_candidates <- orderp %>%
   group_by(user_id, product_id) %>% 
   summarise(
     up_orders = n(),
@@ -107,15 +123,20 @@ temp <- orderp %>%
     ave_freq = mean(days_since_prior_order)
   )
 
-data <- data %>%
+product_candidates <- product_candidates %>%
   left_join(temp, by = c("user_id", "product_id")) %>%
   mutate(ave_freq = ifelse(is.na(ave_freq), 0, ave_freq))
-# rm(orderp, orders)
+
+rm(orderp, orders, temp)
+
+dbWriteTable(instacart, name = "users", users)
+dbWriteTable(instacart, name = "prd", prd)
+
 ```
 
 ```{r}
 # Step 4 ----------------------------------------------------
-data <- data %>% 
+data <- product_candidates %>% 
   inner_join(prd, by = "product_id") %>%
   inner_join(users, by = "user_id") %>%
   mutate(up_order_rate = up_orders / user_orders) %>%
@@ -125,8 +146,20 @@ data <- data %>%
   left_join(ordert %>% select(user_id, product_id, reordered), 
             by = c("user_id", "product_id"))
 
-# rm(ordert, prd, users)
+data <- data %>%
+  mutate(prod_reorder_third = ifelse(is.na(prod_reorder_third), 0, prod_reorder_third))
+
+rm(ordert, prd, users)
 gc()
+```
+
+```{r}
+m <- as.data.frame(data) %>% select(-user_id, -product_id, -eval_set, -order_id, -reordered)
+corrplot(as.matrix(cor(m)), tl.cex = 0.6)
+```
+```{r}
+data %>%
+  filter(is.na(prod_reorder_third))
 ```
 
 ```{r}
@@ -197,12 +230,10 @@ data %>%
 ```
 
 ```{r}
-library(corrplot)
-m <- as.data.frame(data) %>% select(-user_id, -product_id, -eval_set, -order_id, -reordered)
-corrplot(as.matrix(cor(m)), tl.cex = 0.6)
+
 ```
 ```{r}
-rm(us, users)
+rm(model, params)
 ```
 
 
