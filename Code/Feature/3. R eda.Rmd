@@ -11,8 +11,7 @@ library(feather)
 library(ggplot2)
 library(stringr)
 library(corrplot)
-library(DBI)
-library(RSQLite)
+library(tibble)
 ```
 
 ```{r}
@@ -27,28 +26,63 @@ rf <- function(x) {
 order_products__prior <- rf("order_products__prior.feather")
 order_products__train <- rf("order_products__train.feather")
 orders <- rf("orders.feather")
+aisles <- rf("aisles.feather")
+products <- rf("products.feather")
+departments <- rf("departments.feather")
 
 orders$eval_set <- as.factor(orders$eval_set)
+aisles$aisle <- as.factor(aisles$aisle)
+departments$department <- as.factor(departments$department)
+products$product_name <- as.factor(products$product_name)
 
-instacart <- dbConnect(SQLite(), "instacart.sqlite")
-dbWriteTable(instacart, name = "order_products__prior", order_products__prior)
-dbWriteTable(instacart, name = "order_products__train", order_products__train)
-dbWriteTable(instacart, name = "orders", orders)
 
+```
+```{r}
 # step 2
 ordert <- order_products__train %>%
   mutate(user_id = orders$user_id[match(order_products__train$order_id, orders$order_id)])
-orderp <- orders %>% 
-  inner_join(order_products__prior, by = "order_id")
 
 dbWriteTable(instacart, name = "ordert", ordert)
-dbWriteTable(instacart, name = "orderp", orderp)
 
+p_a_d <- products %>% 
+  inner_join(aisles) %>% inner_join(departments)
+
+orderp <- orders %>% 
+  inner_join(order_products__prior, by = "order_id") %>%
+  inner_join(p_a_d, by = "product_id")
+
+rm(aisles, departments, products, p_a_d)
 rm(order_products__prior, order_products__train)
 ```
 
 ```{r}
 # step 3
+#if want to rsqlite, must change my code from using dplyr to sql code
+
+orderp <- orderp %>%
+  select(-aisle, -department, -product_name)
+
+# aisle
+aisle <- orderp %>%
+  group_by(aisle_id) %>%
+  summarise(
+    aisle_ave_dow = mean(order_dow), 
+    aisle_hour_of_day = mean(order_hour_of_day),
+    aisle_ave_dow_std = sd(order_dow), 
+    aisle_hour_of_day_std = sd(order_hour_of_day)
+  )
+
+# departments
+department <- orderp %>%
+  group_by(department_id) %>%
+  summarise(
+    department_ave_dow = mean(order_dow), 
+    department_hour_of_day = mean(order_hour_of_day),
+    department_ave_dow_std = sd(order_dow), 
+    department_hour_of_day_std = sd(order_hour_of_day)
+  )
+
+# products
 prd <- orderp %>%
   arrange(user_id, order_number, product_id) %>%
   group_by(user_id, product_id) %>%
@@ -70,6 +104,8 @@ prd <- prd %>%
   select(-prod_reorders, -prod_first_orders, -prod_second_orders, -prod_third_orders)
 
 gc()
+
+# orderp <- as.tibble(dbReadTable(instacart, "orderp"))
 
 # Users -------------------------------------------------------------------
 users <- orders %>%
@@ -128,14 +164,12 @@ product_candidates <- product_candidates %>%
   mutate(ave_freq = ifelse(is.na(ave_freq), 0, ave_freq))
 
 rm(orderp, orders, temp)
-
-dbWriteTable(instacart, name = "users", users)
-dbWriteTable(instacart, name = "prd", prd)
-
 ```
 
 ```{r}
 # Step 4 ----------------------------------------------------
+ordert <- as.tibble(dbReadTable(instacart, "orderp"))
+
 data <- product_candidates %>% 
   inner_join(prd, by = "product_id") %>%
   inner_join(users, by = "user_id") %>%
@@ -149,11 +183,20 @@ data <- product_candidates %>%
 data <- data %>%
   mutate(prod_reorder_third = ifelse(is.na(prod_reorder_third), 0, prod_reorder_third))
 
+data <- data %>%
+  inner_join(aisle, by = "aisle_id") %>%
+  inner_join(department, by = "department_id")
+
 rm(ordert, prd, users)
 gc()
 ```
+```{r}
+m <- as.data.frame(data) %>% select(-user_id, -product_id, -eval_set, -order_id, -reordered)
+corrplot(as.matrix(cor(m)), tl.cex = 0.6)
+```
 
 ```{r}
+#old
 m <- as.data.frame(data) %>% select(-user_id, -product_id, -eval_set, -order_id, -reordered)
 corrplot(as.matrix(cor(m)), tl.cex = 0.6)
 ```
@@ -181,10 +224,6 @@ write_feather(train, "train26.feather")
 write_feather(test, "test26.feather")
 rm(train, test)
 gc()
-```
-
-```{r}
-browseVignettes(package = "Rcpp")
 ```
 
 ```{r}
@@ -232,9 +271,7 @@ data %>%
 ```{r}
 
 ```
-```{r}
-rm(model, params)
-```
+
 
 
 
