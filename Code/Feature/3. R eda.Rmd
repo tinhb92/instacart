@@ -22,6 +22,8 @@ rf <- function(x) {
   read_feather(file.path(path, x))
 }
 
+SUBSET = TRUE
+
 # step 1
 order_products__prior <- rf("order_products__prior.feather")
 order_products__train <- rf("order_products__train.feather")
@@ -35,14 +37,36 @@ aisles$aisle <- as.factor(aisles$aisle)
 departments$department <- as.factor(departments$department)
 products$product_name <- as.factor(products$product_name)
 
+if (SUBSET) {
+  user_list <- orders %>%
+    select(user_id) %>%
+    distinct()
+
+  user_list[sample(nrow(user_list)),]
+
+  user_subset = user_list[1:33333, ]
+
+  orders <- user_subset %>% inner_join(orders)
+  
+  order_traintest_subset <- orders %>% 
+  filter(eval_set != "prior") %>%
+  select(order_id)
+  
+  order_products__train <- order_traintest_subset %>% inner_join(order_products__train)
+  rm(user_list, user_subset, order_traintest_subset)
+}
 
 ```
+
+
+
+```{r}
+```
+
 ```{r}
 # step 2
 ordert <- order_products__train %>%
   mutate(user_id = orders$user_id[match(order_products__train$order_id, orders$order_id)])
-
-dbWriteTable(instacart, name = "ordert", ordert)
 
 p_a_d <- products %>% 
   inner_join(aisles) %>% inner_join(departments)
@@ -53,12 +77,11 @@ orderp <- orders %>%
 
 rm(aisles, departments, products, p_a_d)
 rm(order_products__prior, order_products__train)
+
 ```
 
 ```{r}
 # step 3
-#if want to rsqlite, must change my code from using dplyr to sql code
-
 orderp <- orderp %>%
   select(-aisle, -department, -product_name)
 
@@ -105,8 +128,6 @@ prd <- prd %>%
 
 gc()
 
-# orderp <- as.tibble(dbReadTable(instacart, "orderp"))
-
 # Users -------------------------------------------------------------------
 users <- orders %>%
   filter(eval_set == "prior") %>%
@@ -143,7 +164,7 @@ gc()
 
 # Database ----------------------------------------------------------------
 product_candidates <- orderp %>%
-  group_by(user_id, product_id) %>% 
+  group_by(user_id, department_id, aisle_id, product_id) %>% 
   summarise(
     up_orders = n(),
     up_first_order = min(order_number),
@@ -168,8 +189,6 @@ rm(orderp, orders, temp)
 
 ```{r}
 # Step 4 ----------------------------------------------------
-ordert <- as.tibble(dbReadTable(instacart, "orderp"))
-
 data <- product_candidates %>% 
   inner_join(prd, by = "product_id") %>%
   inner_join(users, by = "user_id") %>%
@@ -180,6 +199,7 @@ data <- product_candidates %>%
   left_join(ordert %>% select(user_id, product_id, reordered), 
             by = c("user_id", "product_id"))
 
+#bottleneck here
 data <- data %>%
   mutate(prod_reorder_third = ifelse(is.na(prod_reorder_third), 0, prod_reorder_third))
 
@@ -197,12 +217,8 @@ corrplot(as.matrix(cor(m)), tl.cex = 0.6)
 
 ```{r}
 #old
-m <- as.data.frame(data) %>% select(-user_id, -product_id, -eval_set, -order_id, -reordered)
-corrplot(as.matrix(cor(m)), tl.cex = 0.6)
-```
-```{r}
-data %>%
-  filter(is.na(prod_reorder_third))
+# m <- as.data.frame(data) %>% select(-user_id, -product_id, -eval_set, -order_id, -reordered)
+# corrplot(as.matrix(cor(m)), tl.cex = 0.6)
 ```
 
 ```{r}
