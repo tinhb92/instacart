@@ -16,12 +16,13 @@ library(tibble)
 
 ```{r}
 # Load Data ---------------------------------------------------------------
-path <- "/media/tin/DATA/Kaggle/Instacart/Input/"
+input_path <- "/media/tin/DATA/Kaggle/Instacart/Input/"
 
 rf <- function(x) {
-  read_feather(file.path(path, x))
+  read_feather(file.path(input_path, x))
 }
 
+#subset 
 SUBSET = TRUE
 
 # step 1
@@ -39,6 +40,7 @@ products$product_name <- as.factor(products$product_name)
 
 if (SUBSET) {
   user_list <- orders %>%
+    filter(eval_set == "train") %>%
     select(user_id) %>%
     distinct()
 
@@ -48,19 +50,31 @@ if (SUBSET) {
 
   orders <- user_subset %>% inner_join(orders)
   
-  order_traintest_subset <- orders %>% 
+  order_traintest_subset <- orders %>%
   filter(eval_set != "prior") %>%
   select(order_id)
-  
+
   order_products__train <- order_traintest_subset %>% inner_join(order_products__train)
   rm(user_list, user_subset, order_traintest_subset)
 }
 
-```
+#None case
 
+train_results <- order_products__train %>%
+  filter(reordered == 1) %>%
+  group_by(order_id) %>%
+  summarise(
+    products = paste(product_id, collapse = " ")
+  )
 
+train_none <- data.frame(
+  order_id = unique(order_products__train$order_id[!order_products__train$order_id 
+                                  %in% train_results$order_id]),
+  products = "None"
+)
 
-```{r}
+train_results <- train_results %>% bind_rows(train_none) %>% arrange(order_id)
+rm(train_none)
 ```
 
 ```{r}
@@ -207,12 +221,25 @@ data <- data %>%
   inner_join(aisle, by = "aisle_id") %>%
   inner_join(department, by = "department_id")
 
-rm(ordert, prd, users)
+rm(ordert, prd, users, product_candidates)
 gc()
 ```
+
 ```{r}
-m <- as.data.frame(data) %>% select(-user_id, -product_id, -eval_set, -order_id, -reordered)
-corrplot(as.matrix(cor(m)), tl.cex = 0.6)
+# Transfer to Python
+if (SUBSET) {
+  write_feather(data, file.path(input_path, "train_subset.feather"))
+  write_feather(train_results, file.path(input_path, "train_subset_results.feather"))
+  rm(data)
+  rm(train_results)
+  gc()
+}
+
+```
+
+```{r}
+# m <- as.data.frame(data) %>% select(-user_id, -product_id, -eval_set, -order_id, -reordered)
+# corrplot(as.matrix(cor(m)), tl.cex = 0.6)
 ```
 
 ```{r}
