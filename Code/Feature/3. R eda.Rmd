@@ -43,10 +43,9 @@ if (SUBSET) {
     filter(eval_set == "train") %>%
     select(user_id) %>%
     distinct()
-
-  user_list[sample(nrow(user_list)),]
-
-  user_subset = user_list[1:33333, ]
+  
+  set.seed(88)
+  user_subset = user_list[sample(nrow(user_list)),][1:33333, ]
 
   orders <- user_subset %>% inner_join(orders)
   
@@ -75,6 +74,8 @@ train_none <- data.frame(
 
 train_results <- train_results %>% bind_rows(train_none) %>% arrange(order_id)
 rm(train_none)
+
+
 ```
 
 ```{r}
