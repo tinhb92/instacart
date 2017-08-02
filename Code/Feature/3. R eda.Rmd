@@ -16,7 +16,7 @@ library(tibble)
 
 ```{r}
 # Load Data ---------------------------------------------------------------
-input_path <- "/media/tin/DATA/Kaggle/Instacart/Input/"
+input_path <- "/media/tin/DATA/Kaggle/Instacart/Input/Original"
 
 rf <- function(x) {
   read_feather(file.path(input_path, x))
@@ -45,19 +45,22 @@ if (SUBSET) {
     distinct()
   
   set.seed(88)
-  user_subset = user_list[sample(nrow(user_list)),][1:33333, ]
+  user_subset = user_list[sample(nrow(user_list)),][1:20000, ]
 
   orders <- user_subset %>% inner_join(orders)
   
-  order_traintest_subset <- orders %>%
-  filter(eval_set != "prior") %>%
-  select(order_id)
+  order_products__train <- orders %>%
+    filter(eval_set != "prior") %>%
+    select(order_id) %>%
+    inner_join(order_products__train)
+  
+  order_products__prior <- orders %>%
+    filter(eval_set == "prior") %>%
+    select(order_id) %>%
+    inner_join(order_products__prior)
 
-  order_products__train <- order_traintest_subset %>% inner_join(order_products__train)
-  rm(user_list, user_subset, order_traintest_subset)
+  rm(user_list, user_subset)
 }
-
-#None case
 
 train_results <- order_products__train %>%
   filter(reordered == 1) %>%
@@ -75,7 +78,9 @@ train_none <- data.frame(
 train_results <- train_results %>% bind_rows(train_none) %>% arrange(order_id)
 rm(train_none)
 
-
+filter_none <- train_results %>%
+  mutate(None = (train_results$products == 'None') * 1) %>%
+  select(-products)
 ```
 
 ```{r}
@@ -203,6 +208,12 @@ rm(orderp, orders, temp)
 ```
 
 ```{r}
+# New
+filter_none = filter_none %>%
+  inner_join(users, by = 'order_id')
+```
+
+```{r}
 # Step 4 ----------------------------------------------------
 data <- product_candidates %>% 
   inner_join(prd, by = "product_id") %>%
@@ -228,9 +239,12 @@ gc()
 
 ```{r}
 # Transfer to Python
+subset_path <- "/media/tin/DATA/Kaggle/Instacart/Input/Subset20000"
+
 if (SUBSET) {
-  write_feather(data, file.path(input_path, "train_subset.feather"))
-  write_feather(train_results, file.path(input_path, "train_subset_results.feather"))
+  write.csv(data, file.path(subset_path, "train_subset.csv"))
+  write.csv(train_results, file.path(subset_path, "train_subset_results.csv"))
+  write.csv(filter_none, file.path(subset_path, "filter_none.csv"))
   rm(data)
   rm(train_results)
   gc()
@@ -239,12 +253,6 @@ if (SUBSET) {
 ```
 
 ```{r}
-# m <- as.data.frame(data) %>% select(-user_id, -product_id, -eval_set, -order_id, -reordered)
-# corrplot(as.matrix(cor(m)), tl.cex = 0.6)
-```
-
-```{r}
-#old
 # m <- as.data.frame(data) %>% select(-user_id, -product_id, -eval_set, -order_id, -reordered)
 # corrplot(as.matrix(cor(m)), tl.cex = 0.6)
 ```
@@ -260,13 +268,6 @@ test <- as.data.frame(data[data$eval_set == "test",]) %>%
   select(-eval_set, -user_id, -reordered)
 
 rm(data)
-gc()
-```
-
-```{r}
-write_feather(train, "train26.feather")
-write_feather(test, "test26.feather")
-rm(train, test)
 gc()
 ```
 
@@ -313,7 +314,22 @@ data %>%
 ```
 
 ```{r}
+data <- rf("train_subset.feather")
 
+plot(data$up_orders)
+
+data$reordered[is.na(data$reordered)] <- 0
+
+data %>%
+  filter(up_orders < 8) %>%
+  ggplot(aes(up_orders)) +
+  geom_histogram() 
+  # coord_cartesian(xlim = c(0, 10))
+
+data %>%
+  ggplot(aes(up_orders, department_id)) +
+  geom_point(alpha = 1/100) +
+  facet_wrap(~reordered)
 ```
 
 
