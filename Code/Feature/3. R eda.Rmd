@@ -17,13 +17,19 @@ library(tibble)
 ```{r}
 # Load Data ---------------------------------------------------------------
 input_path <- "/media/tin/DATA/Kaggle/Instacart/Input/Original"
+subset_path <- "/media/tin/DATA/Kaggle/Instacart/Input/Subset20000"
 
 rf <- function(x) {
   read_feather(file.path(input_path, x))
 }
 
+subset_csv <- function(data, x) {
+  write.csv(data, file.path(subset_path, x), row.names = FALSE)
+}
+
 #subset 
 SUBSET = TRUE
+RECORD = TRUE
 
 # step 1
 order_products__prior <- rf("order_products__prior.feather")
@@ -62,6 +68,12 @@ if (SUBSET) {
   rm(user_list, user_subset)
 }
 
+if (RECORD) {
+  subset_csv(orders, "orders.csv")
+  subset_csv(order_products__train, "order_products__train.csv")
+  subset_csv(order_products__prior, "order_products__prior.csv")
+}
+
 train_results <- order_products__train %>%
   filter(reordered == 1) %>%
   group_by(order_id) %>%
@@ -81,6 +93,10 @@ rm(train_none)
 filter_none <- train_results %>%
   mutate(None = (train_results$products == 'None') * 1) %>%
   select(-products)
+```
+
+```{r}
+
 ```
 
 ```{r}
@@ -214,6 +230,12 @@ filter_none = filter_none %>%
 ```
 
 ```{r}
+filter_none %>%
+  filter(None == 1) %>%
+  count()
+```
+
+```{r}
 # Step 4 ----------------------------------------------------
 data <- product_candidates %>% 
   inner_join(prd, by = "product_id") %>%
@@ -224,6 +246,8 @@ data <- product_candidates %>%
            (user_orders - up_first_order + 1)) %>%
   left_join(ordert %>% select(user_id, product_id, reordered), 
             by = c("user_id", "product_id"))
+
+data$reordered[is.na(data$reordered)] <- 0
 
 #bottleneck here
 data <- data %>%
@@ -241,15 +265,18 @@ gc()
 # Transfer to Python
 subset_path <- "/media/tin/DATA/Kaggle/Instacart/Input/Subset20000"
 
-if (SUBSET) {
-  write.csv(data, file.path(subset_path, "train_subset.csv"))
-  write.csv(train_results, file.path(subset_path, "train_subset_results.csv"))
-  write.csv(filter_none, file.path(subset_path, "filter_none.csv"))
-  rm(data)
-  rm(train_results)
-  gc()
+wcsv <- function(data, x) {
+  write.csv(data, file.path(subset_path, x), row.names = F)
 }
 
+if (SUBSET) {
+  wcsv(data, "data_subset.csv")
+  wcsv(train_results, "data_subset_results.csv")
+  wcsv(filter_none, "filter_none.csv")
+  # rm(data)
+  # rm(train_results)
+  gc()
+}
 ```
 
 ```{r}
