@@ -22,21 +22,8 @@ test <- read_feather(path_test)
 ```
 
 ```{r}
-glimpse(test)
-```
-
-```{r}
-glimpse(train)
-#mapping characteristics to reordered, product_id and order_id agnostic
-```
-
-```{r}
-
-```
-
-```{r}
 #all the data downloaded concentrated down to train and test
-#mapping relation between reorder and other variables
+
 #the question is whether any big information loss occurred when concentrated down?
 
 #New products not ordered before in the prior products are dropped and not considered
@@ -81,9 +68,7 @@ X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
 test$reordered <- predict(model, X)
 test$reordered <- (test$reordered > 0.19) * 1 #* 1 to convert True False to 0 1
 #originally 0.21
-```
 
-```{r}
 #for orders with atleast 1 product
 submission <- test %>%
   filter(reordered == 1) %>%
@@ -91,30 +76,25 @@ submission <- test %>%
   summarise(
     products = paste(product_id, collapse = " ")
   )
-submission
-```
-
-```{r}
-
 
 missing <- data.frame(
   order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
   products = "None"
 )
-glimpse(missing)
-head(missing, 10)
-```
 
-```{r}
 submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
-glimpse(submission)
-head(submission, 10)
+
 ```
 
 ```{r}
 path <- path <- "/media/tin/DATA/Kaggle/Instacart/Output/"
 write.csv(submission, file = file.path(path,"submit_fulltrain.csv"), row.names = F)
 
+```
+
+```{r}
+library(dplyr)
+?sample_frac
 ```
 
 Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
